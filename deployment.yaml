@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tglobe-loadlinks
+  labels:
+    app: tglobe
+spec:
+  replicas: 2 # High Availability: If one pod fails, the other stays up
+  selector:
+    matchLabels:
+      app: tglobe
+  template:
+    metadata:
+      labels:
+        app: tglobe
+    spec:
+      containers:
+      - name: tglobe-app
+        image: tglobe-app:latest
+        imagePullPolicy: Never # Crucial for Minikube local images!
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe: # Restarts the container if it freezes
+          httpGet:
+            path: /api/v1/bookings
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10

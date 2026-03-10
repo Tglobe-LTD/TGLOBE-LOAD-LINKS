@@ -1,28 +1,25 @@
-package com.tglobe.loadlinks.controller;
-
-import com.tglobe.loadlinks.model.Booking;
-import com.tglobe.loadlinks.repository.BookingRepository;
-import org.springframework.web.bind.annotation.*;
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/v1/bookings")
 public class BookingController {
-    
-    private final BookingRepository repository;
 
-    public BookingController(BookingRepository repository) {
-        this.repository = repository;
+    private final BookingService service;
+
+    public BookingController(BookingService service) { this.service = service; }
+
+    @PostMapping
+    public Booking create(@RequestBody Booking booking) { return service.createBooking(booking); }
+
+    @GetMapping
+    public List<Booking> getAll() { return service.getAll(); }
+
+    @GetMapping("/{id}")
+    public Optional<Booking> getOne(@PathVariable Long id) { return service.getById(id); }
+
+    @PutMapping("/{id}")
+    public Booking update(@PathVariable Long id, @RequestBody Booking booking) { 
+        return service.updateBooking(id, booking); 
     }
 
-    @PostMapping("/request")
-    public Booking createBooking(@RequestBody Booking booking) {
-        // Business Logic: If weight > 5tons, set category to HEAVY
-        return repository.save(booking);
-    }
-
-    @GetMapping("/all")
-    public List<Booking> getAllBookings() {
-        return repository.findAll();
-    }
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable Long id) { service.deleteBooking(id); }
 }
