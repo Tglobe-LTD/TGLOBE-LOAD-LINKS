@@ -129,11 +129,30 @@
                 <h2 class="mb-0">
                     <i class="bi bi-truck"></i> TGlobe Load Links
                 </h2>
-                <div>
-                    <span class="badge bg-light text-dark p-3">
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-light text-dark p-3 me-3">
                         <i class="bi bi-database"></i> 
                         <span id="totalCount">0</span> Active Bookings
                     </span>
+                    
+                    <!-- Account Dropdown -->
+                    <div class="dropdown">
+                        <button class="btn btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> Account
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="showChangePassword()">
+                                <i class="bi bi-shield-lock"></i> Change Password
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="showForgotPassword()">
+                                <i class="bi bi-key"></i> Forgot Password
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="#">
+                                <i class="bi bi-box-arrow-right"></i> Logout
+                            </a></li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -614,7 +633,7 @@
                             <button class="btn btn-outline-primary btn-sm me-2" onclick="showEditProfile()">
                                 <i class="bi bi-pencil"></i> Edit Profile
                             </button>
-                            <button class="btn btn-outline-secondary btn-sm" onclick="changePassword()">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="showChangePassword()">
                                 <i class="bi bi-key"></i> Change Password
                             </button>
                         </div>
@@ -882,6 +901,89 @@
         </div>
     </div>
 
+    <!-- Forgot Password Modal -->
+    <div class="modal fade" id="forgotPasswordModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title text-primary">
+                        <i class="bi bi-key"></i> Reset Password
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="resetStep1">
+                        <p>Enter your email address and we'll send you a link to reset your password.</p>
+                        <div class="mb-3">
+                            <label class="form-label">Email address</label>
+                            <input type="email" class="form-control" id="resetEmail" placeholder="your@email.com">
+                        </div>
+                    </div>
+                    
+                    <div id="resetStep2" style="display: none;">
+                        <p>Check your email for a reset link. Enter the new password below:</p>
+                        <div class="mb-3">
+                            <label class="form-label">New Password</label>
+                            <input type="password" class="form-control" id="newPassword" placeholder="Enter new password">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" id="confirmPassword" placeholder="Confirm new password">
+                        </div>
+                        <input type="hidden" id="resetToken">
+                    </div>
+                    
+                    <div id="resetStep3" style="display: none;">
+                        <div class="text-center">
+                            <i class="bi bi-check-circle-fill text-success" style="font-size: 48px;"></i>
+                            <h4 class="mt-3">Password Reset Successful!</h4>
+                            <p>You can now login with your new password.</p>
+                        </div>
+                    </div>
+                    
+                    <div id="resetMessage" class="alert" style="display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="resetActionBtn" onclick="handlePasswordReset()">Send Reset Link</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div class="modal fade" id="changePasswordModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title text-primary">
+                        <i class="bi bi-shield-lock"></i> Change Password
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Current Password</label>
+                        <input type="password" class="form-control" id="currentPassword">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="changeNewPassword">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirm New Password</label>
+                        <input type="password" class="form-control" id="changeConfirmPassword">
+                    </div>
+                    <div id="changePasswordMessage" class="alert" style="display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitChangePassword()">Change Password</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ========== GLOBAL VARIABLES ==========
@@ -899,6 +1001,9 @@
 
         // Chart instances
         let bookingStatusChart, monthlyTrendsChart, driverPerformanceChart, vehicleUtilizationChart, loadTypeChart;
+
+        // Password reset state
+        let resetStep = 1;
 
         // ========== SECTION SWITCHING ==========
         function showSection(section, event) {
@@ -1292,7 +1397,6 @@
         }
 
         async function showNearbyDrivers() {
-            // Use default coordinates (can be made dynamic with browser geolocation)
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
@@ -1311,10 +1415,9 @@
             }
         }
 
-        // Haversine formula to calculate distance between two points
         function calculateDistance(lat1, lon1, lat2, lon2) {
             if (!lat2 || !lon2) return Infinity;
-            const R = 6371; // Earth's radius in km
+            const R = 6371;
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
             const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -1519,14 +1622,12 @@
         // ========== REPORTS FUNCTIONS ==========
         async function loadReports() {
             try {
-                // Load statistics
                 const bookingStats = await fetch('/api/v1/bookings?page=0&size=1').then(r => r.json());
                 const driverStats = await fetch('/api/v1/drivers/statistics').then(r => r.json());
                 const vehicleStats = await fetch('/api/v1/vehicles/statistics').then(r => r.json());
                 
                 document.getElementById('totalBookingsReport').textContent = bookingStats.totalElements || 0;
                 
-                // Create/update charts
                 createBookingStatusChart();
                 createMonthlyTrendsChart();
                 createDriverPerformanceChart(driverStats);
@@ -1677,10 +1778,6 @@
             alert('Profile edit feature coming soon!');
         }
 
-        function changePassword() {
-            alert('Password change feature coming soon!');
-        }
-
         function saveSettings() {
             const settings = {
                 emailNotifications: document.getElementById('emailNotifications').checked,
@@ -1693,8 +1790,6 @@
             
             console.log('Settings saved:', settings);
             alert('Settings saved successfully!');
-            
-            // Apply theme
             applyTheme(settings.theme);
         }
 
@@ -1715,9 +1810,195 @@
             }
         }
 
+        // ========== PASSWORD RESET FUNCTIONS ==========
+        function showForgotPassword() {
+            resetStep = 1;
+            document.getElementById('resetStep1').style.display = 'block';
+            document.getElementById('resetStep2').style.display = 'none';
+            document.getElementById('resetStep3').style.display = 'none';
+            document.getElementById('resetActionBtn').textContent = 'Send Reset Link';
+            document.getElementById('resetActionBtn').onclick = handlePasswordReset;
+            document.getElementById('resetEmail').value = '';
+            document.getElementById('resetToken').value = '';
+            hideMessage('resetMessage');
+            new bootstrap.Modal(document.getElementById('forgotPasswordModal')).show();
+        }
+
+        async function handlePasswordReset() {
+            if (resetStep === 1) {
+                await requestPasswordReset();
+            } else if (resetStep === 2) {
+                await submitNewPassword();
+            }
+        }
+
+        async function requestPasswordReset() {
+            const email = document.getElementById('resetEmail').value;
+            
+            if (!email || !email.includes('@')) {
+                showMessage('resetMessage', 'Please enter a valid email address', 'danger');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/auth/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email })
+                });
+                
+                const data = await response.json();
+                
+                showMessage('resetMessage', data.message, 'success');
+                
+                const urlParams = new URLSearchParams(window.location.search);
+                const token = urlParams.get('token');
+                
+                if (token) {
+                    const validateResponse = await fetch('/api/auth/validate-reset-token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: token })
+                    });
+                    
+                    const validateData = await validateResponse.json();
+                    
+                    if (validateData.valid) {
+                        resetStep = 2;
+                        document.getElementById('resetStep1').style.display = 'none';
+                        document.getElementById('resetStep2').style.display = 'block';
+                        document.getElementById('resetActionBtn').textContent = 'Reset Password';
+                        document.getElementById('resetToken').value = token;
+                        hideMessage('resetMessage');
+                    }
+                }
+            } catch (error) {
+                showMessage('resetMessage', 'Error requesting password reset', 'danger');
+            }
+        }
+
+        async function submitNewPassword() {
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const token = document.getElementById('resetToken').value;
+            
+            if (!newPassword || newPassword.length < 6) {
+                showMessage('resetMessage', 'Password must be at least 6 characters', 'danger');
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                showMessage('resetMessage', 'Passwords do not match', 'danger');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        token: token,
+                        newPassword: newPassword 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resetStep = 3;
+                    document.getElementById('resetStep2').style.display = 'none';
+                    document.getElementById('resetStep3').style.display = 'block';
+                    document.getElementById('resetActionBtn').style.display = 'none';
+                    showMessage('resetMessage', data.message, 'success');
+                } else {
+                    showMessage('resetMessage', data.message, 'danger');
+                }
+            } catch (error) {
+                showMessage('resetMessage', 'Error resetting password', 'danger');
+            }
+        }
+
+        function showChangePassword() {
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('changeNewPassword').value = '';
+            document.getElementById('changeConfirmPassword').value = '';
+            hideMessage('changePasswordMessage');
+            new bootstrap.Modal(document.getElementById('changePasswordModal')).show();
+        }
+
+        async function submitChangePassword() {
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('changeNewPassword').value;
+            const confirmPassword = document.getElementById('changeConfirmPassword').value;
+            
+            if (!currentPassword || !newPassword) {
+                showMessage('changePasswordMessage', 'Please fill all fields', 'danger');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                showMessage('changePasswordMessage', 'New password must be at least 6 characters', 'danger');
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                showMessage('changePasswordMessage', 'New passwords do not match', 'danger');
+                return;
+            }
+            
+            const userId = localStorage.getItem('userId') || '1';
+            
+            try {
+                const response = await fetch('/api/auth/change-password', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'UserId': userId
+                    },
+                    body: JSON.stringify({ 
+                        oldPassword: currentPassword,
+                        newPassword: newPassword 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('changePasswordMessage', data.message, 'success');
+                    setTimeout(() => {
+                        bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
+                    }, 2000);
+                } else {
+                    showMessage('changePasswordMessage', data.message, 'danger');
+                }
+            } catch (error) {
+                showMessage('changePasswordMessage', 'Error changing password', 'danger');
+            }
+        }
+
+        function showMessage(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `alert alert-${type}`;
+            element.style.display = 'block';
+        }
+
+        function hideMessage(elementId) {
+            document.getElementById(elementId).style.display = 'none';
+        }
+
         // ========== INITIALIZATION ==========
         document.addEventListener('DOMContentLoaded', function() {
             loadBookings();
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            
+            if (token) {
+                showForgotPassword();
+                document.getElementById('resetToken').value = token;
+                setTimeout(() => requestPasswordReset(), 500);
+            }
         });
     </script>
 </body>

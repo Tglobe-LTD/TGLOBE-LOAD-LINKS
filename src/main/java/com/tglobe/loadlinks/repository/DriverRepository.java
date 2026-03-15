@@ -18,17 +18,25 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     
     List<Driver> findByStatus(String status);
     
-    @Query("SELECT d FROM Driver d WHERE " +
-           "LOWER(d.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(d.licenseNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(d.phone) LIKE LOWER(CONCAT('%', :search, '%'))")
-    Page<Driver> searchDrivers(@Param("search") String search, Pageable pageable);
+@Query("SELECT d FROM Driver d WHERE " +
+       "LOWER(d.firstName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+       "LOWER(d.lastName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+       "CONCAT(LOWER(d.firstName), ' ', LOWER(d.lastName)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+       "LOWER(d.licenseNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+       "LOWER(d.phone) LIKE LOWER(CONCAT('%', :search, '%'))")
+Page<Driver> searchDrivers(@Param("search") String search, Pageable pageable);
     
     @Query("SELECT d FROM Driver d WHERE d.rating >= :minRating")
     List<Driver> findTopRated(@Param("minRating") Double minRating);
     
     long countByStatus(String status);
     
+    // ===== NEW METHODS FOR USER AUTHENTICATION =====
+    Optional<Driver> findByEmail(String email);
+    
+    Page<Driver> findByStatus(String status, Pageable pageable);
+    
+    // ===== PROXIMITY MATCHING METHODS =====
     // Haversine formula for distance calculation (in km)
     @Query(value = "SELECT d.*, (6371 * acos(cos(radians(:lat)) * cos(radians(d.current_latitude)) * " +
            "cos(radians(d.current_longitude) - radians(:lng)) + sin(radians(:lat)) * sin(radians(d.current_latitude)))) AS distance " +
@@ -44,7 +52,7 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
             @Param("lng") Double longitude,
             @Param("maxDistance") Double maxDistanceKm,
             @Param("limit") int limit);
-    
+
     @Query(value = "SELECT d.*, (6371 * acos(cos(radians(:lat)) * cos(radians(d.current_latitude)) * " +
            "cos(radians(d.current_longitude) - radians(:lng)) + sin(radians(:lat)) * sin(radians(d.current_latitude)))) AS distance " +
            "FROM drivers d " +
