@@ -52,7 +52,7 @@ pipeline {
         TOMCAT_STAGING = 'ubuntu@35.183.246.53:22'
         TOMCAT_PROD = 'ubuntu@35.183.246.53:22'
         TOMCAT_WEBAPPS = '/opt/tomcat/webapps'
-        TOMCAT_MANAGER_URL = 'http://35.183.246.53:8080/manager/text'  // Your Tomcat manager
+        TOMCAT_MANAGER_URL = 'http://35.183.246.53:8009/manager/text'  // Your Tomcat manager
         
         // Jenkins Credentials
         TOMCAT_SSH_CREDENTIALS = 'tomcat-ssh-key'
@@ -138,7 +138,7 @@ pipeline {
             }
             post {
                 success {
-                    echo "✅ Deployed to http://35.183.246.53:8080/${CONTEXT_PATH}"
+                    echo "✅ Deployed to http://35.183.246.53:8009/${CONTEXT_PATH}"
                 }
             }
         }
@@ -175,9 +175,9 @@ pipeline {
                 script {
                     sh """
                         sleep 15
-                        curl -f http://35.183.246.53:8080/${CONTEXT_PATH}/actuator/health || \\
-                        curl -f http://35.183.246.53:8080/${CONTEXT_PATH}/health || \\
-                        curl -f http://35.183.246.53:8080/${CONTEXT_PATH}/ || \\
+                        curl -f http://35.183.246.53:8009/${CONTEXT_PATH}/actuator/health || \\
+                        curl -f http://35.183.246.53:8009/${CONTEXT_PATH}/health || \\
+                        curl -f http://35.183.246.53:8009/${CONTEXT_PATH}/ || \\
                         echo "⚠️ Application deployed but health check endpoint not found"
                         echo "✅ Deployment verified"
                     """
@@ -189,7 +189,7 @@ pipeline {
     post {
         always {
             echo "Build finished: ${currentBuild.currentResult}"
-            echo "Application deployed at: http://35.183.246.53:8080/${CONTEXT_PATH}"
+            echo "Application deployed at: http://35.183.246.53:8009/${CONTEXT_PATH}"
             cleanWs()
         }
         success {
