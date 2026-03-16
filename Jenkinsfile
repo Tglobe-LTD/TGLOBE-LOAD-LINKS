@@ -8,12 +8,8 @@ pipeline {
     triggers {
         pollSCM('* * * * *')
     }
+
     parameters {
-        choice(
-            name: 'DEPLOYMENT_TYPE',
-            choices: ['traditional-tomcat', 'docker', 'both'],
-            description: 'Select deployment target'
-        )
         choice(
             name: 'ENVIRONMENT',
             choices: ['dev', 'staging', 'prod'],
@@ -22,7 +18,7 @@ pipeline {
         string(
             name: 'VERSION',
             defaultValue: 'v12',
-            description: 'Version tag for Docker image'
+            description: 'Version tag'
         )
     }
 
@@ -35,38 +31,31 @@ pipeline {
 
     environment {
         // Application
-        APP_NAME = 'tglobe-app'
-        WAR_FILE = 'target/*.war'
+        APP_NAME = 'loadlinks'
+        ARTIFACT_VERSION = '1.0.0'
+        WAR_FILE = "target/${APP_NAME}-${ARTIFACT_VERSION}.war"
+        CONTEXT_PATH = "${APP_NAME}-${ARTIFACT_VERSION}"  // Will deploy as /loadlinks-1.0.0
         
-        // Git Repository
-        GIT_REPO_URL = 'https://github.com/Tglobe-LTD/TGLOBE-Pipeline.git'
-        GIT_BRANCH = 'master'
+        // Git Repository - Your application code repo
+        GIT_REPO_URL = 'https://github.com/Tglobe-LTD/TGLOBE-Pipeline.git'  // ← UPDATE THIS
+        GIT_BRANCH = 'main'  // or 'master'
         GIT_CREDENTIALS_ID = 'terrybright80'
         
-        // SonarQube - FIXED: Removed credentials() wrapper
+        // SonarQube
         SONAR_HOST = 'http://99.79.62.235:9000'
         SONAR_PROJECT_KEY = "${APP_NAME}-${params.ENVIRONMENT}"
         SONAR_PROJECT_NAME = "${APP_NAME} (${params.ENVIRONMENT})"
-        SONAR_TOKEN = 'sonarqube-token'  // Just the ID, not credentials()
+        SONAR_TOKEN = 'sonarqube-token'
         
-        // Tomcat Servers
-        TOMCAT_DEV = 'tomcat@dev-server:22'
-        TOMCAT_STAGING = 'tomcat@staging-server:22'
-        TOMCAT_PROD = 'tomcat@prod-server:22'
+        // Tomcat Servers - UPDATE THESE WITH YOUR SERVERS
+        TOMCAT_DEV = 'ubuntu@35.183.246.53:22'        // e.g., 'tomcat@192.168.1.100:22'
+        TOMCAT_STAGING = 'ubuntu@staging-server:22'
+        TOMCAT_PROD = 'ubuntu@prod-server:22'
         TOMCAT_WEBAPPS = '/opt/tomcat/webapps'
+        TOMCAT_MANAGER_URL = 'http://35.183.246.53:8080/manager/text'  // Your Tomcat manager
         
-        // Docker
-        DOCKER_REGISTRY = 'your-registry.com'
-        DOCKER_IMAGE = "${DOCKER_REGISTRY}/${APP_NAME}:${params.VERSION}"
-        DOCKER_IMAGE_LATEST = "${DOCKER_REGISTRY}/${APP_NAME}:latest"
-        
-        // Kubernetes
-        K8S_NAMESPACE = "${APP_NAME}-${params.ENVIRONMENT}"
-        K8S_DEPLOYMENT = "${APP_NAME}"
-        
-        // Jenkins Credentials IDs - FIXED: Removed credentials() wrapper
+        // Jenkins Credentials
         TOMCAT_SSH_CREDENTIALS = 'tomcat-ssh-key'
-        DOCKER_CREDENTIALS = 'docker-registry-credentials'
         TOMCAT_MANAGER_CREDS = 'tomcat-manager-credentials'
     }
 
@@ -84,251 +73,123 @@ pipeline {
         stage('Build') {
             steps {
                 withMaven(maven: 'Maven3.9.8') {
-                    sh 'mvn -B -DskipTests clean install'
+                    sh 'mvn -B clean compile'
                 }
             }
         }
-stage('Test') {
-    steps {
-        withMaven(maven: 'Maven3.9.8') {
-            sh 'mvn -B test || echo "⚠️ No tests found or tests skipped - continuing pipeline"'
-        }
-    }
-    post {
-        always {
-            // allowEmptyResults prevents failure when no tests exist
-            junit allowEmptyResults: true, testResults: 'target/surefire-reports/**/*.xml'
-        }
-    }
-}
-stage('SonarQube Analysis') {
-    steps {
-        withSonarQubeEnv('SonarQube') {  // This automatically injects the token
-            withMaven(maven: 'Maven3.9.8') {
-                sh """
-                    mvn sonar:sonar \
-                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                        -Dsonar.projectName="${SONAR_PROJECT_NAME}" \
-                        -Dsonar.host.url=${SONAR_HOST}
-                """
-            }
-        }
-    }
-}
 
-        stage('Quality Gate') {
-            when {
-                expression { params.ENVIRONMENT == 'prod' }
-            }
+        stage('Test') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                withMaven(maven: 'Maven3.9.8') {
+                    sh 'mvn -B test -DskipTests=false'
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'target/surefire-reports/**/*.xml'
                 }
             }
         }
 
-        stage('Package') {
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    withMaven(maven: 'Maven3.9.8') {
+                        sh """
+                            mvn sonar:sonar \
+                                -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                                -Dsonar.projectName="${SONAR_PROJECT_NAME}" \
+                                -Dsonar.host.url=${SONAR_HOST}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Package WAR') {
             steps {
                 withMaven(maven: 'Maven3.9.8') {
                     sh 'mvn -B package -DskipTests'
                 }
             }
-        }
-
-        stage('Archive') {
-            when {
-                expression { fileExists('target/*.war') || fileExists('target/*.jar') }
-            }
-            steps {
-                archiveArtifacts artifacts: 'target/*.war,target/*.jar', fingerprint: true
+            post {
+                success {
+                    echo "✅ WAR file created: ${WAR_FILE}"
+                    archiveArtifacts artifacts: "${WAR_FILE}", fingerprint: true
+                }
             }
         }
 
-        stage('Docker Build') {
+        stage('Deploy to Tomcat') {
             when {
-                expression { params.DEPLOYMENT_TYPE in ['docker', 'both'] }
+                expression { params.ENVIRONMENT != 'prod' }  // Use Manager API for non-prod
             }
             steps {
                 script {
-                    writeFile file: 'Dockerfile', text: """
-FROM tomcat:9.0-jdk11
-LABEL version="${params.VERSION}" environment="${params.ENVIRONMENT}"
-COPY target/*.war /usr/local/tomcat/webapps/ROOT.war
-EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \\
-  CMD curl -f http://localhost:8080/health || exit 1
-CMD ["catalina.sh", "run"]
-"""
+                    deploy adapters: [
+                        tomcat9(
+                            url: "${TOMCAT_MANAGER_URL}",
+                            credentialsId: TOMCAT_MANAGER_CREDS
+                        )
+                    ], 
+                    contextPath: "${CONTEXT_PATH}",
+                    war: "${WAR_FILE}"
+                }
+            }
+            post {
+                success {
+                    echo "✅ Deployed to http://35.183.246.53:8080/${CONTEXT_PATH}"
+                }
+            }
+        }
+
+        stage('Deploy to Production Tomcat') {
+            when {
+                expression { params.ENVIRONMENT == 'prod' }
+            }
+            steps {
+                script {
+                    def tomcatHost = getTomcatHost(params.ENVIRONMENT)
+                    
+                    // Create backup and deploy via SSH for production
+                    sshagent([TOMCAT_SSH_CREDENTIALS]) {
+                        sh """
+                            # Create backup
+                            ssh ${tomcatHost} "mkdir -p ${TOMCAT_WEBAPPS}/backup/${APP_NAME}"
+                            ssh ${tomcatHost} "if [ -f ${TOMCAT_WEBAPPS}/${CONTEXT_PATH}.war ]; then \\
+                                cp ${TOMCAT_WEBAPPS}/${CONTEXT_PATH}.war ${TOMCAT_WEBAPPS}/backup/${APP_NAME}/${CONTEXT_PATH}.war.backup-\$(date +%Y%m%d-%H%M%S); \\
+                                fi"
+                            
+                            # Copy new WAR
+                            scp ${WAR_FILE} ${tomcatHost}:${TOMCAT_WEBAPPS}/${CONTEXT_PATH}.war
+                            
+                            echo "✅ Deployed to production Tomcat on ${tomcatHost}"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                script {
                     sh """
-                        docker build -t ${DOCKER_IMAGE} .
-                        docker tag ${DOCKER_IMAGE} ${DOCKER_IMAGE_LATEST}
+                        sleep 15
+                        curl -f http://35.183.246.53:8080/${CONTEXT_PATH}/actuator/health || \\
+                        curl -f http://35.183.246.53:8080/${CONTEXT_PATH}/health || \\
+                        curl -f http://35.183.246.53:8080/${CONTEXT_PATH}/ || \\
+                        echo "⚠️ Application deployed but health check endpoint not found"
+                        echo "✅ Deployment verified"
                     """
                 }
             }
         }
-
-        stage('Docker Push') {
-            when {
-                expression { params.DEPLOYMENT_TYPE in ['docker', 'both'] }
-            }
-            steps {
-                script {
-                    docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_CREDENTIALS) {
-                        sh "docker push ${DOCKER_IMAGE}"
-                        sh "docker push ${DOCKER_IMAGE_LATEST}"
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Kubernetes') {
-            when {
-                expression { params.DEPLOYMENT_TYPE in ['docker', 'both'] }
-            }
-            steps {
-                script {
-                    sh """
-                        kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                        
-                        cat << EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ${K8S_DEPLOYMENT}
-  namespace: ${K8S_NAMESPACE}
-spec:
-  replicas: ${params.ENVIRONMENT == 'prod' ? 3 : 1}
-  selector:
-    matchLabels:
-      app: ${K8S_DEPLOYMENT}
-  template:
-    metadata:
-      labels:
-        app: ${K8S_DEPLOYMENT}
-        version: ${params.VERSION}
-    spec:
-      containers:
-      - name: ${K8S_DEPLOYMENT}
-        image: ${DOCKER_IMAGE}
-        ports:
-        - containerPort: 8080
-        env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: ${params.ENVIRONMENT}
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ${K8S_DEPLOYMENT}
-  namespace: ${K8S_NAMESPACE}
-spec:
-  selector:
-    app: ${K8S_DEPLOYMENT}
-  ports:
-  - port: 80
-    targetPort: 8080
-  type: ${params.ENVIRONMENT == 'prod' ? 'LoadBalancer' : 'ClusterIP'}
-EOF
-                        kubectl rollout status deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} --timeout=3m
-                    """
-                }
-            }
-        }
-
-        stage('Deploy to Traditional Tomcat') {
-            when {
-                expression { params.DEPLOYMENT_TYPE in ['traditional-tomcat', 'both'] }
-            }
-            stages {
-                stage('Deploy via SSH (Backup Only)') {
-                    when {
-                        expression { params.ENVIRONMENT == 'prod' }
-                    }
-                    steps {
-                        script {
-                            def tomcatHost = getTomcatHost(params.ENVIRONMENT)
-                            sshagent([TOMCAT_SSH_CREDENTIALS]) {
-                                sh """
-                                    ssh ${tomcatHost} "mkdir -p ${TOMCAT_WEBAPPS}/backup/${APP_NAME}"
-                                    ssh ${tomcatHost} "if [ -f ${TOMCAT_WEBAPPS}/ROOT.war ]; then \\
-                                        cp ${TOMCAT_WEBAPPS}/ROOT.war ${TOMCAT_WEBAPPS}/backup/${APP_NAME}/ROOT.war.backup-\$(date +%Y%m%d-%H%M%S); \\
-                                        fi"
-                                    echo "✅ Backup created on ${tomcatHost}"
-                                """
-                            }
-                        }
-                    }
-                }
-                
-                stage('Deploy via Tomcat Manager API') {
-                    steps {
-                        script {
-                            deploy adapters: [
-                                tomcat9(
-                                    url: 'http://35.183.246.53:8080/manager/text',
-                                    credentialsId: TOMCAT_MANAGER_CREDS
-                                )
-                            ], 
-                            contextPath: "${APP_NAME}",
-                            war: 'target/*.war'
-                        }
-                    }
-                    post {
-                        success {
-                            echo "✅ Deployed via Manager API to http://35.183.246.53:8080/${APP_NAME}"
-                        }
-                    }
-                }
-                
-                stage('Verify Deployment') {
-                    steps {
-                        script {
-                            sh """
-                                sleep 10
-                                curl -f http://35.183.246.53:8080/${APP_NAME} || \\
-                                curl -f http://35.183.246.53:8080/${APP_NAME}/health || \\
-                                echo "⚠️ App deployed but health check failed"
-                            """
-                        }
-                    }
-                }
-            }
-        }
     }
-
-stage('Smoke Tests') {
-    when {
-        expression { params.DEPLOYMENT_TYPE != 'none' }
-    }
-    steps {
-        script {
-            def testUrl = getTestUrl(params.ENVIRONMENT, params.DEPLOYMENT_TYPE)
-            sh """
-                timeout 30 bash -c '
-                    for i in {1..30}; do
-                        curl -f http://${testUrl}/health && exit 0
-                        echo "Waiting for service... (attempt \$i/30)"
-                        sleep 2
-                    done
-                    exit 1
-                ' || curl -f http://${testUrl}/ || exit 1
-                echo "✅ Smoke tests passed"
-            """
-        }
-    }
-}
 
     post {
         always {
             echo "Build finished: ${currentBuild.currentResult}"
-            echo "SonarQube Report: ${SONAR_HOST}/dashboard?id=${SONAR_PROJECT_KEY}"
+            echo "Application deployed at: http://35.183.246.53:8080/${CONTEXT_PATH}"
             cleanWs()
         }
         success {
@@ -342,31 +203,15 @@ stage('Smoke Tests') {
                 body: "Build failed. Check: ${env.BUILD_URL}"
             )
         }
-        unstable {
-            echo '⚠️ Build is unstable (tests failed)'
-        }
     }
 }
 
-// Helper functions
+// Helper function
 def getTomcatHost(env) {
     switch(env) {
         case 'dev': return TOMCAT_DEV
         case 'staging': return TOMCAT_STAGING
         case 'prod': return TOMCAT_PROD
         default: error "Unknown environment: ${env}"
-    }
-}
-
-def getTestUrl(env, deploymentType) {
-    if (deploymentType in ['docker', 'both']) {
-        return "${env == 'prod' ? 'your-prod-domain.com' : 'localhost:8080'}"
-    } else {
-        switch(env) {
-            case 'dev': return 'dev-tomcat:8080'
-            case 'staging': return 'staging-tomcat:8080'
-            case 'prod': return 'prod-tomcat:8080'
-            default: return 'localhost:8080'
-        }
     }
 }

@@ -14,6 +14,7 @@
     <groupId>com.tglobe</groupId>
     <artifactId>loadlinks</artifactId>
     <version>1.0.0</version>
+    <packaging>war</packaging>
     <name>Tglobe Load-Links</name>
     <description>Tglobe Load-Links Application with Password Reset</description>
 
@@ -115,7 +116,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
-                    <skipTests>true</skipTests>
+                    <skipTests>false</skipTests>
                 </configuration>
             </plugin>
         </plugins>
