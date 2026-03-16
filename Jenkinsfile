@@ -2,12 +2,10 @@ pipeline {
     agent any
 
     tools {
-        // Must match the Maven name in Jenkins (Jenkins → Manage Jenkins → Tools → Maven)
         maven 'Maven3.9.8'
     }
 
     triggers {
-        // Poll SCM every minute
         pollSCM('* * * * *')
     }
 
@@ -37,8 +35,6 @@ pipeline {
     }
 
     environment {
-        // ============ CONFIGURE THESE VALUES ============
-        
         // Application
         APP_NAME = 'tglobe-app'
         WAR_FILE = 'target/*.war'
@@ -46,21 +42,22 @@ pipeline {
         // Git Repository
         GIT_REPO_URL = 'https://github.com/Tglobe-LTD/TGLOBE-Pipeline.git'
         GIT_BRANCH = 'master'
-        GIT_CREDENTIALS_ID = 'terrybright80'  // Your Jenkins GitHub credential ID
+        GIT_CREDENTIALS_ID = 'terrybright80'
         
-        // SonarQube
+        // SonarQube - FIXED: Removed credentials() wrapper
         SONAR_HOST = 'http://99.79.62.235:9000'
         SONAR_PROJECT_KEY = "${APP_NAME}-${params.ENVIRONMENT}"
         SONAR_PROJECT_NAME = "${APP_NAME} (${params.ENVIRONMENT})"
+        SONAR_TOKEN = 'sonarqube-token'  // Just the ID, not credentials()
         
-        // Tomcat Servers (SSH format: user@host:port)
+        // Tomcat Servers
         TOMCAT_DEV = 'tomcat@dev-server:22'
         TOMCAT_STAGING = 'tomcat@staging-server:22'
         TOMCAT_PROD = 'tomcat@prod-server:22'
         TOMCAT_WEBAPPS = '/opt/tomcat/webapps'
         
         // Docker
-        DOCKER_REGISTRY = 'your-registry.com'  // e.g., 'docker.io/yourusername'
+        DOCKER_REGISTRY = 'your-registry.com'
         DOCKER_IMAGE = "${DOCKER_REGISTRY}/${APP_NAME}:${params.VERSION}"
         DOCKER_IMAGE_LATEST = "${DOCKER_REGISTRY}/${APP_NAME}:latest"
         
@@ -68,15 +65,10 @@ pipeline {
         K8S_NAMESPACE = "${APP_NAME}-${params.ENVIRONMENT}"
         K8S_DEPLOYMENT = "${APP_NAME}"
         
-        // Jenkins Credentials IDs
+        // Jenkins Credentials IDs - FIXED: Removed credentials() wrapper
         TOMCAT_SSH_CREDENTIALS = 'tomcat-ssh-key'
         DOCKER_CREDENTIALS = 'docker-registry-credentials'
-        SONAR_TOKEN = credentials('sonarqube-token')
-        
-        // Tomcat Manager API
-        TOMCAT_MANAGER_URL = 'http://35.183.246.53:8080/manager/text'
         TOMCAT_MANAGER_CREDS = 'tomcat-manager-credentials'
-        // ================================================
     }
 
     stages {
@@ -119,7 +111,8 @@ pipeline {
                             mvn sonar:sonar \
                                 -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
                                 -Dsonar.projectName="${SONAR_PROJECT_NAME}" \
-                                -Dsonar.host.url=${SONAR_HOST}
+                                -Dsonar.host.url=${SONAR_HOST} \
+                                -Dsonar.login=${SONAR_TOKEN}
                         """
                     }
                 }
@@ -341,7 +334,7 @@ EOF
         failure {
             echo '❌ Build or deployment failed'
             emailext(
-                to: 'team@yourcompany.com',  // Update with your team email
+                to: 'team@yourcompany.com',
                 subject: "❌ Deployment Failed: ${APP_NAME} to ${params.ENVIRONMENT}",
                 body: "Build failed. Check: ${env.BUILD_URL}"
             )
@@ -352,7 +345,7 @@ EOF
     }
 }
 
-// ============ HELPER FUNCTIONS ============
+// Helper functions
 def getTomcatHost(env) {
     switch(env) {
         case 'dev': return TOMCAT_DEV
