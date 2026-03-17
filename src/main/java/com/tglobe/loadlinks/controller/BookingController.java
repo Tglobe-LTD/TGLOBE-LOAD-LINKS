@@ -2,7 +2,7 @@ package com.tglobe.loadlinks.controller;
 
 import com.tglobe.loadlinks.model.Booking;
 import com.tglobe.loadlinks.service.BookingService;
-import jakarta.validation.Valid;
+import javax.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;

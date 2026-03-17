@@ -1,6 +1,6 @@
 package com.tglobe.loadlinks.model;
 
-import jakarta.persistence.*;
+import javax.persistence.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 

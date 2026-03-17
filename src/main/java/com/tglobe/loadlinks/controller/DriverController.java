@@ -2,7 +2,7 @@ package com.tglobe.loadlinks.controller;
 
 import com.tglobe.loadlinks.model.Driver;
 import com.tglobe.loadlinks.service.DriverService;
-import jakarta.validation.Valid;
+import javax.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
